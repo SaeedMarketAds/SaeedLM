@@ -26,9 +26,9 @@ while True:
     words = question.split()
     ids = [vocab.get(word, vocab["[UNK]"]) for word in words]
 
-    current = ids[-1] if ids else vocab["[USER]"]
+    current = vocab["[ASSISTANT]"]
     generated = []
-    started_answer = False
+    started_answer = True
 
     for _ in range(30):
         probs = transition[current]
