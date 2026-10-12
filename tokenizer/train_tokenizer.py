@@ -1,44 +1,96 @@
+import json
 import os
-from tokenizers import Tokenizer, models, trainers, pre_tokenizers
+import re
+from collections import Counter
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CORPUS = os.path.join(BASE_DIR, "dataset", "raw", "saeed_corpus.txt")
-TOKENIZER_OUTPUT = os.path.join(BASE_DIR, "tokenizer", "tokenizer.json")
-
-print("🚀 Starting SaeedLM Tokenizer Training (HuggingFace BPE)...")
-
-# 1. إعداد نموذج BPE
-tokenizer = Tokenizer(models.BPE(unk_token="[UNK]"))
-
-# 2. استخدام BertPreTokenizer لفصل علامات الترقيم
-tokenizer.pre_tokenizer = pre_tokenizers.BertPreTokenizer()
-
-# 3. إعداد المدرب
-trainer = trainers.BpeTrainer(
-    vocab_size=500,
-    min_frequency=1,
-    special_tokens=[
-        "[PAD]", "[UNK]", "[BOS]", "[EOS]",
-        "[USER]", "[ASSISTANT]", "[SYSTEM]"
-    ],
-    show_progress=True
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
 )
 
-# 4. التدريب
-print("📂 Corpus:", CORPUS)
-tokenizer.train([CORPUS], trainer)
+CORPUS = os.path.join(
+    BASE_DIR, "dataset", "raw", "saeed_corpus.txt"
+)
 
-# 5. الحفظ
-os.makedirs(os.path.dirname(TOKENIZER_OUTPUT), exist_ok=True)
-tokenizer.save(TOKENIZER_OUTPUT)
+OUTPUT = os.path.join(
+    BASE_DIR, "tokenizer", "tokenizer.json"
+)
 
-print("✅ Tokenizer saved at:", TOKENIZER_OUTPUT)
+TOKEN_PATTERN = re.compile(
+    r'\[(?:USER|ASSISTANT|SYSTEM)\]'
+    r'|[^\W\d_]+'
+    r'|\d+'
+    r'|[^\w\s]',
+    re.UNICODE
+)
 
-# 6. اختبار فوري
-print("\n🔎 Test:")
-test_text = "[USER] ما هو التسويق الرقمي؟ [ASSISTANT]"
-encoding = tokenizer.encode(test_text)
-print("Text:  ", test_text)
-print("Tokens:", encoding.tokens)
-print("IDs:   ", encoding.ids)
-print("\n📦 Vocabulary size:", tokenizer.get_vocab_size())
+SPECIAL = [
+    "[PAD]", "[UNK]", "[BOS]", "[EOS]",
+    "[USER]", "[ASSISTANT]", "[SYSTEM]"
+]
+
+COMMON = [
+    "من", "أنت", "أنا", "السلام", "عليكم",
+    "حالك", "حالكم", "هل", "ماذا", "لماذا",
+    "أين", "متى", "كيف", "كم", "نعم", "لا",
+    "شكرا", "أهلا", "مرحبا", "وداعا",
+    "ما", "هو", "هي", "في", "على", "إلى",
+    "عن", "و", "التسويق", "الرقمي",
+    "الإعلانات", "الممولة", "SEO", "المحتوى",
+    "العلامة", "التجارية", "الجمهور",
+    "المستهدف", "؟", "،", ".", "!", ":", "؛"
+]
+
+
+def main():
+    if not os.path.isfile(CORPUS):
+        raise FileNotFoundError(
+            f"Corpus not found: {CORPUS}"
+        )
+
+    counter = Counter()
+
+    with open(CORPUS, encoding="utf-8") as file:
+        for line in file:
+            counter.update(TOKEN_PATTERN.findall(line.strip()))
+
+    vocab = {}
+
+    for token in SPECIAL + COMMON:
+        if token not in vocab:
+            vocab[token] = len(vocab)
+
+    for token, _ in counter.most_common():
+        if token not in vocab:
+            vocab[token] = len(vocab)
+
+    print("SaeedLM Pure Python Tokenizer")
+    print("Unique corpus tokens:", len(counter))
+    print("Total corpus tokens:", sum(counter.values()))
+    print("Vocabulary size:", len(vocab))
+    print("Question mark ID:", vocab.get("؟", "MISSING"))
+    print("SEO ID:", vocab.get("SEO", "MISSING"))
+
+    # Write to a separate file first; do not replace the active vocabulary.
+    candidate = os.path.join(
+        BASE_DIR, "tokenizer", "tokenizer_candidate.json"
+    )
+
+    with open(candidate, "w", encoding="utf-8") as file:
+        json.dump(vocab, file, ensure_ascii=False, indent=2)
+
+    # Validate the saved candidate.
+    with open(candidate, encoding="utf-8") as file:
+        check = json.load(file)
+
+    assert check == vocab
+    assert all(token in check for token in SPECIAL)
+    assert "؟" in check
+    assert "SEO" in check
+
+    print("Candidate saved:", candidate)
+    print("Validation: OK")
+    print("Active tokenizer.json was not changed.")
+
+
+if __name__ == "__main__":
+    main()

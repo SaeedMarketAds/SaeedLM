@@ -20,9 +20,10 @@ print("Output:", OUTPUT)
 print()
 
 TOKEN_PATTERN = re.compile(
-    r'\[(?:USER|ASSISTANT|SYSTEM)\]'                  # الرموز الخاصة
-    r'|[\w\u0600-\u06FF\u0750-\u077F\u064B-\u065F]+'  # الكلمات العربية والإنجليزية مع التشكيل
-    r'|[^\w\s]'                                        # علامات الترقيم
+    r'\[(?:USER|ASSISTANT|SYSTEM)\]'
+    r'|[^\W\d_]+'
+    r'|\d+'
+    r'|[^\w\s]'
 )
 
 count = 0
